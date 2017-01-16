@@ -1,0 +1,223 @@
+<html>
+	<head>
+		<!--  Documentaion for table is at http://ng-table.com/#/-->
+
+		<!-- import bootstrap -->
+		<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+
+		<!-- import amazon aws sdk -->
+		<script src="//sdk.amazonaws.com/js/aws-sdk-2.7.21.min.js"></script>
+		
+		<!-- import angular -->
+		<script src="//cdnjs.cloudflare.com/ajax/libs/angular.js/1.4.2/angular.js"></script>
+
+		<!-- import ngtable -->
+		<link rel="stylesheet"; href="https://unpkg.com/ng-table@2.0.2/bundles/ng-table.min.css">
+		<script src="https://unpkg.com/ng-table@2.0.2/bundles/ng-table.min.js"></script>
+
+		<!-- import d3 and c3 for graphing -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js" integrity="sha256-dsOXGNHAo/syFnazt+KTBsCQeRmlcW1XKL0bCK4Baec=" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.11/c3.min.js" integrity="sha256-mlJR4DaLFvEBAgHcavz/vASrM6RrzcQq2lXDBwMixZU=" crossorigin="anonymous"></script>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.11/c3.min.css" integrity="sha256-gl80aFE+bSTFw7UJf+ne/RkwC55cjidIp0Oe3AX5pfo=" crossorigin="anonymous" />
+
+		<!-- lodash -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.4/lodash.min.js" integrity="sha256-8E6QUcFg1KTnpEU8TFGhpTGHw5fJqB9vCms3OhAYLqw=" crossorigin="anonymous"></script>
+
+		<script>
+			function getUrlParameter(param, dummyPath) {
+			        var sPageURL = dummyPath || window.location.search.substring(1),
+			            sURLVariables = sPageURL.split(/[&||?]/),
+			            res;
+
+			        for (var i = 0; i < sURLVariables.length; i += 1) {
+			            var paramName = sURLVariables[i],
+			                sParameterName = (paramName || '').split('=');
+
+			            if (sParameterName[0] === param) {
+			                res = sParameterName[1];
+			            }
+			        }
+
+			        return res;
+			}
+		</script>
+	</head>
+	<body ng-app="myApp">
+		<div ng-controller="TableController as table">
+			<select class="form-control" ng-model="device" ng-options="v as k for (k, v) in deviceMap2" >
+				<option value="">Select Source</option>
+			</select>
+			<button ng-click="selectDeveice()" type="submit" class="btn btn-default">Update Data</button>
+			<button ng-click="refreshChart()" type="submit" class="btn btn-info">Update Chart</button>
+			<div id="chart"></div>
+		    <div ng-table-pagination="tableParams" template-url="'ng-table/pager.html'"></div>
+			<table ng-table="table.tableParams" class="table" show-filter="true" id="dataTable">
+				<tr ng-repeat="entry in $data">
+				<!-- {{entry | json}} -->
+					<!-- <td title="'coreID'" filter="{ coreid: 'text'}" sortable="'coreid'">{{entry.coreid }}</td> -->
+					<td title="'name'" filter="{ name: 'select'}" filter-data="nameOptions">{{entry.name }}</td>
+					<td title="'data'" filter="{ data: 'number'}" sortable="'data'">{{entry.data }}</td>
+					<td title="'published_at'" filter="{ published_at: 'text'}" sortable="'published_at'">{{entry.published_at }}</td>
+				</tr>
+			</table>
+		</div>
+	</body>
+	
+	<script>
+		var myApp = angular.module("myApp", ["ngTable"]);
+
+		myApp.controller('TableController', ['$scope','NgTableParams','ngTableEventsChannel', function($scope,NgTableParams,ngTableEventsChannel){
+
+			$scope.nameOptions = ["Distance","Voltage","Percentage"];
+			$scope.nameOptions = [
+				{id:"Distance",title:"Distance"},
+				{id:"Voltage",title:"Voltage"},
+				{id:"Percentage",title:"Percentage"}
+			]
+
+			var deviceMap1 = {
+				"2b003e001647343337363432": "Wayne's Test",
+				"280021000347343339373536": "Rick's Main Tank",
+				"320035000447343337373738": "Cleveland Test",
+				"2a0022000547343339373536": "Rick's 2nd Tank",
+			};
+			var deviceMap2 = {
+				"Wayne's Test": "2b003e001647343337363432",
+				"Rick's Main Tank": "280021000347343339373536",
+				"Cleveland Test": "320035000447343337373738",
+				"Rick's 2nd Tank": "2a0022000547343339373536",
+			}
+			$scope.deviceMap2 = deviceMap2;
+			$scope.device = null;
+			var self = this;
+
+			self.tableParams = null; // just to init
+			AWS.config.update({region:'us-east-2'});
+
+			var dynamodb = new AWS.DynamoDB({
+				apiVersion: '2012-08-10',
+				params: {
+					TableName: 'OilGaugeData'
+				},
+				accessKeyId: getUrlParameter('accessKeyId'), 
+				secretAccessKey	: getUrlParameter('secretAccessKey'), 
+			});
+
+			$scope.selectDeveice= function(){
+
+				if($scope.device){
+					pullData($scope.device)
+				} 
+			}
+
+			function pullData(coreID){			
+				var params = {
+					KeyConditionExpression: "coreid = :id",//AND #n = :d",
+					// ExpressionAttributeNames: {
+					// 	"#n":"name"
+					// },
+					ExpressionAttributeValues: {
+						":id" : {
+							S: coreID
+						},
+						// ":d" : {
+						// 	S : "Distance"
+						// }
+					}
+				};
+				dynamodb.query(params, function (err, data) {
+					if (err) {
+						console.log(err, err.stack); // an error occurred
+						window.alert("you're not authorized.")
+					} else {
+						console.log(data);           // successful response
+						var data = data.Items;
+
+						data = data.map(function(entry,index,array){
+							return {
+								coreid: entry.coreid.S,
+								name: entry.name.S,
+								published_at: entry.published_at.S,
+								data: entry.data.S,
+							}
+						});
+						self.tableParams = new NgTableParams(
+						{
+							page: 1, // show first page
+							count: 10, // count per page
+							sorting: { published_at: "desc" } 
+						},
+
+						{
+							filterDelay: 0,
+							counts: [5, 10, 25,50,100,200,300,400,500,1000],
+							dataset: data
+						});
+						self.tableParams.reload();
+						// self.tableParams.reloadPages();
+
+
+						function updateChart(data){
+
+							chart;
+							var dataSeries = [];
+							var timeSeries = [];
+							var xs = {};
+
+							var names = _(data).uniqBy('name').map('name').value()
+							var coreIds = _(data).uniqBy('coreid').map('coreid').value();
+
+							for (var i = 0; i < names.length; i++) {
+								for (var j = 0; j < coreIds.length; j++) {
+									var thisArray = []
+									coreIds[j]
+									var dataResults = _(data).filter({name:names[i],coreid:coreIds[j]}).map('data').value();
+									var timeresults = _(data).filter({name:names[i],coreid:coreIds[j]}).map('published_at').value();
+									dataResults.unshift(names[i] + "_" +coreIds[j]);
+									timeresults.unshift(names[i] + "_" +coreIds[j] + "_time");
+									dataSeries.push(dataResults);
+									timeSeries.push(timeresults);
+
+									columns = timeSeries.concat(dataSeries);
+
+									xs[names[i] + "_" +coreIds[j]] = names[i] + "_" +coreIds[j] + "_time";
+
+								}
+							}
+							var chart = c3.generate({
+								bindto: '#chart',
+								data: {
+									xs: xs,
+									xFormat: '%Y-%m-%dT%H:%M:%S.%LZ',
+									columns: columns
+								},
+								axis: {
+									x: {
+										type: 'timeseries',
+										tick:{
+											format: '%Y-%m-%d',
+										}
+									}
+								}
+							});
+
+						};
+
+						// ngTableEventsChannel.onAfterReloadData(function(){
+						// 	updateChart(self.tableParams.data);
+						// }, $scope);
+
+						$scope.refreshChart = function(){
+							updateChart(self.tableParams.data);
+						};
+
+
+						// move table to end to mvoe pagination up
+						var d = document.getElementById("dataTable");
+						d.parentNode.appendChild(d);
+					}
+				});
+			}
+		}])
+	</script>
+</html>
