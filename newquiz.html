@@ -893,7 +893,7 @@
                     c.Quiz = c.Quiz || {}, c.Quiz.Models = c.Quiz.Models || {}, c.Quiz.Collections = c.Quiz.Collections || {};
                     var d = "";
                     b.ajax("https://api.github.com/gists/afd903ecd1482b2492fe51cac71f48fc").then(function(a) {
-                        d = a.files["NaturAllQuiz.json"].raw_url
+                        d = a.files["NewNaturAllQuiz.json"].raw_url
                     }), c.Quiz.Collections.QuizQuestionCollection = b.Collection.extend({
                         initialize: function(a, b) {
                             this.postId = b.postId, this.postType = b.postType
@@ -912,8 +912,8 @@
                         c = a.PB || {};
                     c.Quiz = c.Quiz || {}, c.Quiz.Models = c.Quiz.Models || {}, c.Quiz.Collections = c.Quiz.Collections || {};
                     var d = "";
-                    b.ajax("https://api.github.com/gists/726bbcfe487dae048f5b4ecce842b53d").then(function(a) {
-                        d = a.files["NaturAllQuiz.json"].raw_url
+                    b.ajax("https://api.github.com/gists/afd903ecd1482b2492fe51cac71f48fc").then(function(a) {
+                        d = a.files["NewNaturAllQuiz.json"].raw_url
                     }), c.Quiz.Collections.QuizResultCollection = b.Collection.extend({
                         initialize: function(a, b) {
                             this.postId = b.postId
